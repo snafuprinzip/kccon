@@ -49,7 +49,7 @@ func main() {
 	var globalConfig KubeConfig
 	srcFile, err := os.ReadFile("/etc/k8s/config")
 	if err != nil {
-		log.Printf("srcFile.Get err   #%v ", err)
+		log.Printf("Kann globale kubeconfig nicht lesen: %v", err)
 	}
 
 	err = yaml.Unmarshal(srcFile, &globalConfig)
@@ -57,7 +57,7 @@ func main() {
 		log.Fatalf("Unmarshal: %v", err)
 	}
 
-	// kein Kontext als Argument angegeben, also Liste ausgeben
+	// kein Kontext als Argument angegeben, also Liste ausgeben und ausführung erfolgreich beenden
 	if flag.NArg() == 0 {
 		// contexte ausgeben
 		globalConfig.ListContexts()
@@ -77,7 +77,7 @@ func main() {
 
 	if !found {
 		globalConfig.ListContexts()
-		log.Fatalf("Unbekannter Kontext: %s\n", selectedContext)
+		log.Fatalf("Unbekannter Kontext: %s", selectedContext)
 	}
 
 	contexts.Context.Namespace = *namespace
@@ -93,7 +93,7 @@ func main() {
 	}
 
 	if !found {
-		log.Fatalf("Unbekannter Cluster: %s\n", contexts.Context.Cluster)
+		log.Fatalf("Unbekannter Cluster: %s", contexts.Context.Cluster)
 	}
 
 	// User zum Kontext selektieren
@@ -107,7 +107,7 @@ func main() {
 	}
 
 	if !found {
-		log.Fatalf("Unbekannter User: %s\n", contexts.Context.User)
+		log.Fatalf("Unbekannter User: %s", contexts.Context.User)
 	}
 
 	// Individuelle kubeconfig erstellen
@@ -129,11 +129,16 @@ func main() {
 
 	homedir, err := os.UserHomeDir()
 	if err != nil {
-		log.Fatalf("Cannot determine home directory: %v", err)
+		log.Fatalf("Kann Home Verzeichnis nicht ermitteln: %v", err)
+	}
+
+	err = os.MkdirAll(path.Join(homedir, ".kube"), 0700)
+	if err != nil {
+		log.Fatalf("Fehler beim erstellen des $HOME/.kube Verzeichnisses: %v")
 	}
 
 	err = os.WriteFile(path.Join(homedir, ".kube", "config"), out, 0600)
 	if err != nil {
-		log.Fatalf("Kann individuelle kubeconnfig nicht schreiben: %v\n", err)
+		log.Fatalf("Kann individuelle kubeconnfig nicht schreiben: %v", err)
 	}
 }
