@@ -55,7 +55,7 @@ func main() {
 	// Argumente auslesen
 	namespace := flag.String("n", "default", "k8s namespace")
 	localConfigPath := flag.String("p", path.Join(homedir, ".kube", "config"), "local config file path")
-	globalConfigPath := flag.String("g", path.Join("etc", "k8s", "config"), "global config file path")
+	globalConfigPath := flag.String("g", path.Join("/", "etc", "k8s", "config"), "global config file path")
 	flag.Usage = ShowUsage
 	flag.Parse()
 
