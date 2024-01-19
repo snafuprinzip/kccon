@@ -48,27 +48,19 @@ type Users struct {
 }
 
 // ListContexts listet alle Kontexte der globalen kubeconfig unter /etc/k8s/config auf
-func (c *KubeConfig) ListContexts() {
+func (c *KubeConfig) ListContexts(localConfigPath string) {
+	var oldConfig KubeConfig
+	var currentContext string
+	var currentNamespace string
+
 	activeSign := " "
 	sortedContexts := c.Contexts
 	sort.Slice(sortedContexts, func(i, j int) bool {
 		return sortedContexts[i].Name < sortedContexts[j].Name
 	})
 
-	var oldConfig KubeConfig
-
-	homedir, err := os.UserHomeDir()
-	if err != nil {
-		log.Fatalf("Kann Home Verzeichnis nicht ermitteln: %v", err)
-	}
-
-	localConfigPath := path.Join(homedir, localConfigPathExt)
-
-	var currentContext string
-	var currentNamespace string
-
 	// lokale config einlesen, falls diese existiert
-	if _, err = os.Stat(localConfigPath); err == nil {
+	if _, err := os.Stat(localConfigPath); err == nil {
 		oldConfig.Load(localConfigPath)
 		currentContext = oldConfig.CurrentContext
 		for _, cntCon := range oldConfig.Contexts {

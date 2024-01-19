@@ -2,16 +2,12 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"os/user"
 	"path"
 	"slices"
-)
-
-const (
-	globalConfigPath   = "/etc/k8s/config"
-	localConfigPathExt = ".kube/config"
 )
 
 // CheckUser prüft, ob der aktuelle Benutzer der Gruppe k8s angehört und somit berechtigt ist dieses Tool auszuführen.
@@ -36,15 +32,18 @@ func CheckUser() {
 	}
 }
 
+func ShowUsage() {
+	fmt.Fprintf(flag.CommandLine.Output(), "usage: %s [-n namespace] [-g global config] [-p personal config] [context]\n", os.Args[0])
+	fmt.Fprintln(flag.CommandLine.Output(), "  no arguments\n\tlists available contexts")
+	flag.PrintDefaults()
+}
+
 func main() {
+	var globalConfig KubeConfig
 	var contexts Contexts
 	var clusters Clusters
 	var users Users
 	var found bool
-
-	// Argumente auslesen
-	namespace := flag.String("n", "default", "k8s namespace")
-	flag.Parse()
 
 	// Sicherstellen, dass der aufrufende User der k8s Gruppe angehört
 	CheckUser()
@@ -53,18 +52,24 @@ func main() {
 		log.Fatalf("Kann Home Verzeichnis nicht ermitteln: %v", err)
 	}
 
+	// Argumente auslesen
+	namespace := flag.String("n", "default", "k8s namespace")
+	localConfigPath := flag.String("p", path.Join(homedir, ".kube", "config"), "local config file path")
+	globalConfigPath := flag.String("g", path.Join("etc", "k8s", "config"), "global config file path")
+	flag.Usage = ShowUsage
+	flag.Parse()
+
 	// globale kubeconfig einlesen
-	var globalConfig KubeConfig
-	globalConfig.Load(globalConfigPath)
+	globalConfig.Load(*globalConfigPath)
 
 	// kein Kontext als Argument angegeben, also Liste ausgeben und ausführung erfolgreich beenden
 	if flag.NArg() == 0 {
-		// contexte ausgeben
-		globalConfig.ListContexts()
+		// Kontexte ausgeben
+		globalConfig.ListContexts(*localConfigPath)
 		os.Exit(0)
 	}
 
-	// Context selektieren
+	// Kontext selektieren
 	selectedContext := flag.Arg(0)
 	found = false
 	for _, con := range globalConfig.Contexts {
@@ -76,7 +81,7 @@ func main() {
 	}
 
 	if !found {
-		globalConfig.ListContexts()
+		globalConfig.ListContexts(*localConfigPath)
 		log.Fatalf("Unbekannter Kontext: %s", selectedContext)
 	}
 
@@ -122,5 +127,5 @@ func main() {
 	}
 
 	// individuelle kubeconfig schreiben
-	personalConfig.Save(path.Join(homedir, localConfigPathExt))
+	personalConfig.Save(*localConfigPath)
 }
