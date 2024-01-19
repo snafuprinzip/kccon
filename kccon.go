@@ -2,12 +2,16 @@ package main
 
 import (
 	"flag"
-	"gopkg.in/yaml.v3"
 	"log"
 	"os"
 	"os/user"
 	"path"
 	"slices"
+)
+
+const (
+	globalConfigPath   = "/etc/k8s/config"
+	localConfigPathExt = ".kube/config"
 )
 
 // CheckUser prüft, ob der aktuelle Benutzer der Gruppe k8s angehört und somit berechtigt ist dieses Tool auszuführen.
@@ -24,7 +28,7 @@ func CheckUser() {
 
 	ids, err := currentUser.GroupIds()
 	if err != nil {
-		log.Fatalf("Kann keine Gruppeinformationen zum aktuellen Benutzer finden: %v", err)
+		log.Fatalf("Kann keine Gruppeninformationen zum aktuellen Benutzer finden: %v", err)
 	}
 
 	if !slices.Contains(ids, allowedGroup.Gid) {
@@ -44,18 +48,14 @@ func main() {
 
 	// Sicherstellen, dass der aufrufende User der k8s Gruppe angehört
 	CheckUser()
+	homedir, err := os.UserHomeDir()
+	if err != nil {
+		log.Fatalf("Kann Home Verzeichnis nicht ermitteln: %v", err)
+	}
 
 	// globale kubeconfig einlesen
 	var globalConfig KubeConfig
-	srcFile, err := os.ReadFile("/etc/k8s/config")
-	if err != nil {
-		log.Printf("Kann globale kubeconfig nicht lesen: %v", err)
-	}
-
-	err = yaml.Unmarshal(srcFile, &globalConfig)
-	if err != nil {
-		log.Fatalf("Unmarshal: %v", err)
-	}
+	globalConfig.Load(globalConfigPath)
 
 	// kein Kontext als Argument angegeben, also Liste ausgeben und ausführung erfolgreich beenden
 	if flag.NArg() == 0 {
@@ -122,23 +122,5 @@ func main() {
 	}
 
 	// individuelle kubeconfig schreiben
-	out, err := yaml.Marshal(&personalConfig)
-	if err != nil {
-		log.Fatalf("Marshal: %v", err)
-	}
-
-	homedir, err := os.UserHomeDir()
-	if err != nil {
-		log.Fatalf("Kann Home Verzeichnis nicht ermitteln: %v", err)
-	}
-
-	err = os.MkdirAll(path.Join(homedir, ".kube"), 0700)
-	if err != nil {
-		log.Fatalf("Fehler beim erstellen des $HOME/.kube Verzeichnisses: %v")
-	}
-
-	err = os.WriteFile(path.Join(homedir, ".kube", "config"), out, 0600)
-	if err != nil {
-		log.Fatalf("Kann individuelle kubeconnfig nicht schreiben: %v", err)
-	}
+	personalConfig.Save(path.Join(homedir, localConfigPathExt))
 }
