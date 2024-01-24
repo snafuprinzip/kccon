@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"slices"
 	"sort"
 )
 
@@ -61,12 +62,16 @@ func (c *KubeConfig) ListContexts(localConfigPath string) {
 
 	// lokale config einlesen, falls diese existiert
 	if _, err := os.Stat(localConfigPath); err == nil {
-		oldConfig.Load(localConfigPath)
-		currentContext = oldConfig.CurrentContext
-		for _, cntCon := range oldConfig.Contexts {
-			if cntCon.Name == currentContext {
-				currentNamespace = cntCon.Context.Namespace
-				break
+		readerr := oldConfig.Load(localConfigPath)
+		if readerr != nil {
+			log.Printf("Warnung: Kann lokale Konfiguration nicht lesen: %v\n", readerr)
+		} else {
+			currentContext = oldConfig.CurrentContext
+			for _, cntCon := range oldConfig.Contexts {
+				if cntCon.Name == currentContext {
+					currentNamespace = cntCon.Context.Namespace
+					break
+				}
 			}
 		}
 	}
@@ -104,16 +109,18 @@ func (c *KubeConfig) ListContexts(localConfigPath string) {
 	}
 }
 
-func (c *KubeConfig) Load(configpath string) {
+func (c *KubeConfig) Load(configpath string) error {
 	srcFile, err := os.ReadFile(configpath)
 	if err != nil {
 		log.Printf("Kann kubeconfig %s nicht lesen: %v", configpath, err)
+		return err
 	}
 
 	err = yaml.Unmarshal(srcFile, &c)
 	if err != nil {
 		log.Fatalf("Unmarshal: %v", err)
 	}
+	return nil
 }
 
 func (c *KubeConfig) Save(configpath string) {
@@ -131,5 +138,61 @@ func (c *KubeConfig) Save(configpath string) {
 	err = os.WriteFile(configpath, out, 0600)
 	if err != nil {
 		log.Fatalf("Kann kubeconfig %s nicht schreiben: %v", configpath, err)
+	}
+}
+
+func (c *KubeConfig) AddContext(newConfig KubeConfig) {
+	if _, conptr := c.GetContext(newConfig.Contexts[0].Name); conptr != nil {
+		log.Printf("Kontext %s existiert bereits in der globalen config und wurde daher nicht hinzugefuegt.",
+			newConfig.Contexts[0].Name)
+	} else {
+		c.Clusters = append(c.Clusters, newConfig.Clusters[0])
+		c.Contexts = append(c.Contexts, newConfig.Contexts[0])
+		c.Users = append(c.Users, newConfig.Users[0])
+	}
+}
+
+func (c *KubeConfig) GetContext(contextname string) (int, *Contexts) {
+	for conidx, con := range c.Contexts {
+		if con.Name == contextname {
+			return conidx, &con
+		}
+	}
+	return -1, nil
+}
+
+func (c *KubeConfig) RemoveContext(contextname string) {
+	var confound, clfound, userfound bool
+	for conidx, con := range c.Contexts {
+		if con.Name == contextname {
+			confound = true
+			for clidx, cl := range c.Clusters {
+				if cl.Name == con.Context.Cluster {
+					clfound = true
+					c.Clusters = slices.Delete(c.Clusters, clidx, clidx+1)
+					break
+				}
+			}
+			if !clfound {
+				log.Printf("Kann Cluster %s nicht in der Config finden\n", con.Context.Cluster)
+			}
+
+			for useridx, user := range c.Users {
+				if user.Name == con.Context.User {
+					userfound = true
+					c.Users = slices.Delete(c.Users, useridx, useridx+1)
+					break
+				}
+			}
+			if !userfound {
+				log.Printf("Kann User %s nicht in der Config finden\n", con.Context.User)
+			}
+
+			c.Contexts = slices.Delete(c.Contexts, conidx, conidx+1)
+			break
+		}
+	}
+	if !confound {
+		log.Fatalf("Kann Kontext %s nicht in Config finden.", contextname)
 	}
 }

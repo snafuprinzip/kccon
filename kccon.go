@@ -8,6 +8,7 @@ import (
 	"os/user"
 	"path"
 	"slices"
+	"strings"
 )
 
 // CheckUser prüft, ob der aktuelle Benutzer der Gruppe k8s angehört und somit berechtigt ist dieses Tool auszuführen.
@@ -33,9 +34,28 @@ func CheckUser() {
 }
 
 func ShowUsage() {
-	fmt.Fprintf(flag.CommandLine.Output(), "usage: %s [-n namespace] [-g global config] [-p personal config] [context]\n", os.Args[0])
-	fmt.Fprintln(flag.CommandLine.Output(), "  no arguments\n\tlists available contexts")
+	fmt.Fprintf(flag.CommandLine.Output(), "usage:\n"+
+		"list contexts:   %[1]s [-g global config] [-p personal config]\n"+
+		"set context:     %[1]s [-n namespace] [-g global config] [-p personal config] <context>\n"+
+		"add new context: [sudo] %[1]s [-g global config] [-p personal config] -a <file>\n"+
+		"remove context:  [sudo] %[1]s [-g global config] [-p personal config] -r <context>\n\n", os.Args[0])
 	flag.PrintDefaults()
+}
+
+func AddConfig(newpath string, globalconf *KubeConfig) {
+	var newConfig KubeConfig
+	err := newConfig.Load(newpath)
+	if err != nil {
+		log.Fatalf("Kann neue Config nicht öffnen: %v", err)
+	}
+
+	// Kontextname kürzen
+	newConfig.Contexts[0].Name = strings.TrimPrefix(newConfig.Contexts[0].Name, "ovh-k8s-")
+	newConfig.Contexts[0].Name = strings.TrimPrefix(newConfig.Contexts[0].Name, "sl-")
+	newConfig.Contexts[0].Name = strings.TrimPrefix(newConfig.Contexts[0].Name, "app-plat-")
+	newConfig.Contexts[0].Name = strings.Replace(newConfig.Contexts[0].Name, "-00", "", 1)
+
+	globalconf.AddContext(newConfig)
 }
 
 func main() {
@@ -53,14 +73,31 @@ func main() {
 	}
 
 	// Argumente auslesen
-	namespace := flag.String("n", "default", "k8s namespace")
-	localConfigPath := flag.String("p", path.Join(homedir, ".kube", "config"), "local config file path")
-	globalConfigPath := flag.String("g", path.Join("/", "etc", "k8s", "config"), "global config file path")
+	namespace := flag.String("n", "default", "k8s <namespace>")
+	localConfigPath := flag.String("p", path.Join(homedir, ".kube", "config"), "local config file <path>")
+	globalConfigPath := flag.String("g", path.Join("/", "etc", "k8s", "config"), "global config file <path>")
+	newConfigPath := flag.String("a", "", "add new context from <file> to global config")
+	removeContext := flag.String("r", "", "remove <context> from global config")
 	flag.Usage = ShowUsage
 	flag.Parse()
 
 	// globale kubeconfig einlesen
-	globalConfig.Load(*globalConfigPath)
+	err = globalConfig.Load(*globalConfigPath)
+	if err != nil {
+		log.Fatalf("Kann globale Konfiguration nicht lesen: %v", err)
+	}
+
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "a" {
+			AddConfig(*newConfigPath, &globalConfig)
+			globalConfig.Save(*globalConfigPath)
+			os.Exit(0)
+		} else if f.Name == "r" {
+			globalConfig.RemoveContext(*removeContext)
+			globalConfig.Save(*globalConfigPath)
+			os.Exit(0)
+		}
+	})
 
 	// kein Kontext als Argument angegeben, also Liste ausgeben und ausführung erfolgreich beenden
 	if flag.NArg() == 0 {

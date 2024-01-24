@@ -12,17 +12,22 @@ lesbar ist.
 ## Benutzung
 
 ```shell
-$ kccon -h
-usage: kccon [-n namespace] [-g global config] [-p personal config] [context]
-  no arguments
-	lists available contexts
-  -g string
-    	global config file path (default "etc/k8s/config")
-  -n string
-    	k8s namespace (default "default")
-  -p string
-    	local config file path (default "/home/mleimenmeier/.kube/config")
+$ usage:
+list contexts:   kccon [-g global config] [-p personal config]
+set context:     kccon [-n namespace] [-g global config] [-p personal config] <context>
+add new context: [sudo] kccon [-g global config] [-p personal config] -a <file>
+remove context:  [sudo] kccon [-g global config] [-p personal config] -r <context>
 
+  -a string
+    	add new context from <file> to global config
+  -g string
+    	global config file <path> (default "/etc/k8s/config")
+  -n string
+    	k8s <namespace> (default "default")
+  -p string
+    	local config file <path> (default "/home/mleimenmeier/.kube/config")
+  -r string
+    	remove <context> from global config
 ```
 
 Wird ein Kontext angegeben, wird der Kontext in die lokale Konfiguration kopiert und ein evtl. ebenfalls angegebener namespace
